@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Hand Detection with TensorFlow.js</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        #canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 60%;
+            height: 60%;
+            transform: translate(-50%, -50%);
+        }
+        #webcam-btn {
+            position: absolute;
+            z-index: 2;
+            transform: translate(-50%, -50%);
+            left: 50%;
+            top: 50%;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+            outline: none;
+            border-radius: 5px;
+        }
+        #webcam-btn:active {
+            background-color: #0056b3;
+        }
+        #custom-cursor {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 1px solid black;
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.1);
+            z-index: 10000;
+            pointer-events: none;
+        }
+        .black-box {
+            position: absolute;
+            left: 20%; /* Adjust position as needed */
+            top: 20%; /* Adjust position as needed */
+            width: 60%; /* Adjust width as needed */
+            height: 60%; /* Adjust height as needed */
+            background-color: black;
+            opacity: 0.5;
+            z-index: 1;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+</head>
+<body>
+    <button id="webcam-btn">Use Webcam</button>
+    <video id="video" width="640" height="480" autoplay hidden></video>
+    <canvas id="canvas"></canvas>
+    <div id="custom-cursor"></div>
+    <div class="black-box"></div>
+
+    <script>
+        let blackBox;
+        let cursor;
+
+        window.onload = async function() {
+            const webcamBtn = document.getElementById('webcam-btn');
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            const customCursor = document.getElementById('custom-cursor');
+            blackBox = document.querySelector('.black-box');
+
+            // Set the canvas size based on the aspect ratio of a 15.6-inch laptop screen
+            const screenAspectRatio = 1920 / 1080; // Aspect ratio of 1920/1080
+            let canvasWidth = window.innerWidth; // Width of the canvas
+            let canvasHeight = window.innerHeight; // Height of the canvas
+
+            // Maintain the aspect ratio
+            if (canvasWidth / canvasHeight > screenAspectRatio) {
+                // If the window's aspect ratio is wider than the target aspect ratio
+                canvasWidth = canvasHeight * screenAspectRatio;
+            } else {
+                // If the window's aspect ratio is narrower than the target aspect ratio
+                canvasHeight = canvasWidth / screenAspectRatio;
+            }
+
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+
+            // Draw white grid with squares
+            const squareSize = canvasWidth / 20; // Adjust the divisor to change square size
+            const rows = Math.floor(canvasHeight / squareSize);
+            const cols = Math.floor(canvasWidth / squareSize);
+
+            context.fillStyle = 'white'; // Set square color to white
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    context.fillRect(j * squareSize, i * squareSize, squareSize, squareSize);
+                }
+            }
+
+            try {
+                const model = await handpose.load();
+                let intervalId;
+
+                webcamBtn.addEventListener('click', async function() {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        video.srcObject = stream;
+                        video.play();
+                        video.hidden = true;
+                    } catch (err) {
+                        console.error('Error accessing webcam:', err);
+                        alert('Failed to access webcam. Please make sure it is enabled and try again.');
+                    }
+                });
+
+                video.addEventListener('play', function() {
+                    webcamBtn.style.display = 'none'; // Hide button when video starts playing
+                    intervalId = setInterval(async function() {
+                        if (video.paused || video.ended) {
+                            clearInterval(intervalId);
+                            return;
+                        }
+
+                        const aspectRatio = video.videoWidth / video.videoHeight;
+                        const height = canvas.width / aspectRatio;
+                        if (canvas.height !== height) {
+                            canvas.height = height;
+                        }
+
+                        context.clearRect(0, 0, canvas.width, canvas.height);
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        const predictions = await model.estimateHands(video);
+                        if (predictions.length > 0) {
+                            const keypoints = predictions[0].landmarks;
+                            const tip = keypoints[8]; // Assuming tip of index finger
+                            const tipX = tip[0] * canvas.width / video.videoWidth;
+                            const tipY = tip[1] * canvas.height / video.videoHeight;
+
+                            // Background color change based on finger lift
+                            if (tip[2] < 0) {
+                                document.body.style.backgroundColor = 'green'; // Lifted
+                            } else {
+                                document.body.style.backgroundColor = '#f0f0f0'; // Not lifted
+                            }
+
+                            // Basic click detection (threshold for Y position)
+                            if (tipY < canvas.height * 0.2) {
+                                console.log('Click detected!');
+                                // Add your click action here
+                            }
+
+                            // Drawing hand keypoints for visualization
+                            for (let i = 0; i < keypoints.length; i++) {
+                                const [x, y, z] = keypoints[i];
+                                const newX = x * canvas.width / video.videoWidth;
+                                const newY = y * canvas.height / video.videoHeight;
+                                context.beginPath();
+                                context.arc(newX, newY, 5, 0, 2 * Math.PI);
+                                context.fillStyle = 'red';
+                                context.fill();
+                            }
+
+                            // Determine which square the finger is in
+                            const fingerCol = Math.floor(tipX / squareSize);
+                            const fingerRow = Math.floor(tipY / squareSize);
+
+                            // Change the color of the square the finger is in to red
+                            context.fillStyle = 'red';
+                            context.fillRect(fingerCol * squareSize, fingerRow * squareSize, squareSize, squareSize);
+
+                            // Update the custom cursor position
+                            const cursorX = window.innerWidth * (fingerCol * squareSize + squareSize / 2) / canvas.width;
+                            const cursorY = window.innerHeight * (fingerRow * squareSize + squareSize / 2) / canvas.height;
+                            customCursor.style.left = `${cursorX}px`;
+                            customCursor.style.top = `${cursorY}px`;
+
+                            // Check if only index finger is lifted
+                            const indexFingerTip = keypoints[8];
+                            const middleFingerTip = keypoints[12];
+                            const thumbTip = keypoints[4];
+                            const ringFingerTip = keypoints[16];
+                            const pinkyTip = keypoints[20];
+
+                            if (indexFingerTip[2] < 0 && middleFingerTip[2] < 0 && thumbTip[2] >= 0 && ringFingerTip[2] >= 0 && pinkyTip[2] >= 0) {
+                                document.body.style.backgroundColor = 'blue'; // Only index finger and middle finger are lifted
+                            }
+                        }
+                    }, 1000 / 30); // 30 FPS
+                });
+            } catch (err) {
+                console.error('Error loading handpose model:', err);
+                alert('Failed to load handpose model. Please refresh the page to try again.');
+            }
+
+            // Main loop
+            function mainLoop() {
+                // Get the hand's position from your hand-tracking solution
+                // This needs to be implemented based on your hand-tracking solution
+                const handPosition = getHandPosition();
+
+                // Get the cursor position
+                cursor = {
+                    x: parseFloat(customCursor.style.left),
+                    y: parseFloat(customCursor.style.top)
+                };
+
+                // Call the main loop again on the next frame
+                requestAnimationFrame(mainLoop);
+            }
+
+            // Start the main loop
+            mainLoop();
+        }
+
+        // Function to simulate a click event
+        function simulateClick(element) {
+            const event = new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+            });
+            element.dispatchEvent(event);
+        }
+
+        // Function to check if the hand is closed
+        // This function needs to be implemented based on your hand-tracking solution
+        function isHandClosed() {
+            // Implement this function based on your hand-tracking solution
+            // Return true if the hand is closed, false otherwise
+        }
+
+        // Function to generate a random number between min and max
+        function random(min, max) {            return Math.random() * (max - min) + min;
+        }
+    </script>
+</body>
+</html>
+
