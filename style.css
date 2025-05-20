@@ -1,0 +1,55 @@
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0f0f0;
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+#canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 60%;
+    height: 60%;
+    transform: translate(-50%, -50%);
+}
+#webcam-btn {
+    position: absolute;
+    z-index: 2;
+    transform: translate(-50%, -50%);
+    left: 50%;
+    top: 50%;
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    background-color: #007bff;
+    color: #fff;
+    cursor: pointer;
+    outline: none;
+    border-radius: 5px;
+}
+#webcam-btn:active {
+    background-color: #0056b3;
+}
+#custom-cursor {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 1px solid black;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.1);
+    z-index: 10000;
+    pointer-events: none;
+}
+.black-box {
+    position: absolute;
+    left: 20%; /* Adjust position as needed */
+    top: 20%; /* Adjust position as needed */
+    width: 60%; /* Adjust width as needed */
+    height: 60%; /* Adjust height as needed */
+    background-color: black;
+    opacity: 0.5;
+    z-index: 1;
+}
